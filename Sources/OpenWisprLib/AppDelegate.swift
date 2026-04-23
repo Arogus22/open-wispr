@@ -233,6 +233,9 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 outputURL = RecordingStore.newRecordingURL()
             }
             try recorder.startRecording(to: outputURL)
+            if config.startSoundEnabled?.value ?? true {
+                SoundPlayer.play(config.startSound)
+            }
         } catch {
             print("Error: \(error.localizedDescription)")
             isPressed = false
@@ -247,6 +250,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         guard let audioURL = recorder.stopRecording() else {
             statusBar.state = .idle
             return
+        }
+
+        if config.endSoundEnabled?.value ?? true {
+            SoundPlayer.play(config.endSound)
         }
 
         statusBar.state = .transcribing

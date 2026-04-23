@@ -14,6 +14,10 @@ public struct Config: Codable {
     public var maxRecordings: Int?
     public var toggleMode: FlexBool?
     public var audioInputDeviceID: UInt32?
+    public var startSound: String?
+    public var endSound: String?
+    public var startSoundEnabled: FlexBool?
+    public var endSoundEnabled: FlexBool?
 
     public static let supportedLanguages: [LanguageOption] = [
         LanguageOption(code: "auto", name: "Auto-Detect"),
@@ -141,7 +145,11 @@ public struct Config: Codable {
         language: "en",
         spokenPunctuation: FlexBool(false),
         maxRecordings: nil,
-        toggleMode: FlexBool(false)
+        toggleMode: FlexBool(false),
+        startSound: "/System/Library/Sounds/Ping.aiff",
+        endSound: "/System/Library/Sounds/Bottle.aiff",
+        startSoundEnabled: FlexBool(true),
+        endSoundEnabled: FlexBool(true)
     )
 
     public static var configDir: URL {
