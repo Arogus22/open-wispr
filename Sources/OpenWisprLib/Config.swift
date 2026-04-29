@@ -18,6 +18,9 @@ public struct Config: Codable {
     public var endSound: String?
     public var startSoundEnabled: FlexBool?
     public var endSoundEnabled: FlexBool?
+    public var focusLockEnabled: FlexBool?
+    public var pasteDelayMs: Int?
+    public var preserveClipboard: FlexBool?
 
     public static let supportedLanguages: [LanguageOption] = [
         LanguageOption(code: "auto", name: "Auto-Detect"),
@@ -138,6 +141,13 @@ public struct Config: Codable {
         return min(max(1, raw), 100)
     }
 
+    public static let defaultPasteDelayMs = 500
+
+    public static func effectivePasteDelayMs(_ value: Int?) -> Int {
+        let raw = value ?? Config.defaultPasteDelayMs
+        return min(max(0, raw), 5000)
+    }
+
     public static let defaultConfig = Config(
         hotkey: HotkeyConfig(keyCode: 63, modifiers: []),
         modelPath: nil,
@@ -149,7 +159,10 @@ public struct Config: Codable {
         startSound: "/System/Library/Sounds/Ping.aiff",
         endSound: "/System/Library/Sounds/Bottle.aiff",
         startSoundEnabled: FlexBool(true),
-        endSoundEnabled: FlexBool(true)
+        endSoundEnabled: FlexBool(true),
+        focusLockEnabled: FlexBool(true),
+        pasteDelayMs: 500,
+        preserveClipboard: FlexBool(false)
     )
 
     public static var configDir: URL {
