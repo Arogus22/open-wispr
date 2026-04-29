@@ -10,7 +10,9 @@ class TextInserter {
         self.pasteKeyCode = TextInserter.resolveKeyCode(for: "v") ?? 9
     }
 
-    func insert(text: String) {
+    func insert(text: String, restoreClipboard: Bool = false) {
+        guard !text.isEmpty else { return }
+
         let pasteboard = NSPasteboard.general
         let savedItems = savePasteboard(pasteboard)
 
@@ -19,8 +21,10 @@ class TextInserter {
 
         simulatePaste()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.restorePasteboard(pasteboard, items: savedItems)
+        if restoreClipboard {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.restorePasteboard(pasteboard, items: savedItems)
+            }
         }
     }
 
