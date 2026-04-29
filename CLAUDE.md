@@ -7,9 +7,10 @@ Standing context for any Claude Code session opened in this directory. Read firs
 A personal fork/modification of **open-wispr**, an open-source speech-to-text app for macOS.
 
 - **Upstream repo:** `https://github.com/human37/open-wispr`
-- **Language:** Swift (native macOS app)
+- **User's fork (origin):** `https://github.com/Arogus22/open-wispr`
+- **Language:** Swift 6.3 (native macOS app, SwiftPM)
 - **License:** MIT (permissive — can modify, redistribute, fork freely)
-- **Install method on user's machine:** likely via `brew` (verify before touching installed binary)
+- **Install method on user's machine:** `brew install open-wispr` (binary at `/opt/homebrew/Cellar/open-wispr/0.35.0/`, managed as a brew service).
 
 ## Why this fork exists
 
@@ -45,13 +46,38 @@ Do NOT start Phase 2 until Phase 1 is compiled, installed, and confirmed working
 7. **Install** — replace the brew-installed binary (or wherever it lives) with the compiled one. Back up the original first.
 8. **(Optional) PR upstream** — if the feature is clean, open a Pull Request to `human37/open-wispr`. Elegant path: user benefits, everyone benefits, no permanent fork to maintain.
 
-## Prerequisites the user needs
+## Current status (as of 2026-04-24)
 
-- **Xcode Command Line Tools** — user confirmed NOT installed at project start. Command: `xcode-select --install` (opens macOS installer popup, ~3GB). MUST be installed before any `swift build` can run.
-- **Swift toolchain** — comes with Command Line Tools on macOS.
-- **GitHub fork decision** — not yet made. Options:
-  - Clone original → patch → build → (maybe) PR. Simpler if feature makes it upstream.
-  - Fork on GitHub first → clone fork → patch → push to fork → (maybe) PR. Better if user wants a long-lived personal version.
+- **Phase 1 shipped and in daily use.** Sounds fire on start (Ping / "Sonar") and stop (Bottle / "Seixo"). Config lives at `~/.config/open-wispr/config.json`.
+- **Build toolchain ready.** Xcode Command Line Tools installed. `swift build -c release` works from this directory.
+- **Fork set up.** Pushed to `Arogus22/open-wispr` on `main`. Git identity is privacy-safe: `Arogus <Arogus22@users.noreply.github.com>` (GitHub noreply alias — no real name in commits). Initial commit's author was rewritten; do NOT reintroduce the machine-default `Rafael Ramos <arogus@...>` identity.
+- **Installed binary is patched.** The brew `.app` bundle contains the custom build. Originals backed up as `*.bak.20260422_184624` alongside. A future `brew upgrade open-wispr` or `brew reinstall open-wispr` will overwrite these — rebuild + re-swap + re-codesign + re-grant Accessibility if that happens (see 2026-04-22 CHANGELOG entry for the exact commands).
+
+## Next up — feature roadmap (as of 2026-04-29)
+
+Active feature threads in dependency-aware order. Do NOT implement any of these until the open questions are answered and the user gives explicit go-ahead.
+
+### Phase 2 candidates (small, ready to plan + implement)
+
+- **Focus-lock (paste target + clipboard fallback).** Today, if the user starts a recording in app A, switches to app B during recording, and presses stop, the transcription pastes into app B. Plan: snapshot `NSWorkspace.shared.frontmostApplication` at record start; after Whisper completes (NOT at stop press), re-activate snapshot app, wait ~300ms, then paste. Config: `targetLockMode` ∈ {`"auto"` (default), `"clipboard"`, `"off"`} and `pasteDelayMs` (default 300). Clipboard fallback when target app is gone. **Critical timing:** activation must be post-transcription, not at stop-press, otherwise the 4–5s Whisper wait kills the "browse during processing" workflow. ~1 day scope.
+- **Hotkey-capture UI.** Add Hotkey submenu (preset list + "Custom…") to the menu bar. "Custom…" opens borderless `NSPanel` capturing the next key or modifier-only key (via `flagsChanged`), saves via existing `KeyCodes.parse` → `Config.save` flow. ~½ day scope.
+
+**Open questions before starting Phase 2:**
+1. `targetLockMode` default = `"auto"` — confirm?
+2. Lock target = frontmost at *start* press (not stop) — confirm?
+3. Fallback feedback (activation failure / clipboard mode): status bar only, distinct sound, or both?
+4. `pasteDelayMs` default = 300ms — OK?
+5. Bundle hotkey-UI with focus-lock as one commit, or separate Phase 2.5?
+
+### Phase 3+ (larger, deferred)
+
+- **n8n / Jarvis integration.** Second "command mode" hotkey that POSTs Whisper output to an n8n webhook instead of pasting. Key win: local Whisper replaces paid cloud STT. Open design questions: which hotkey, webhook URL config location, auth/shared-secret, response feedback UX. Not implementation-ready.
+- **Meeting recorder.** Capture system audio (ScreenCaptureKit) + mic, transcribe both streams, output to transcript file with speaker labels. New "meeting mode" trigger. ~3–4 days. Discussed 2026-04-29, not committed.
+- **Custom dictionary, visual overlay, auto language switch** — Phase 2 ideas from earlier roadmap. Still on deck, deprioritized below focus-lock + hotkey UI.
+
+### Explicitly dropped
+
+- **Real-time / live transcription.** Whisper isn't truly streaming; sliding-window and VAD-chunked approaches both sacrifice accuracy and add CPU cost. User chose accuracy over latency on 2026-04-29.
 
 ## Constraints and preferences (from user's global rules)
 
@@ -75,9 +101,9 @@ Do NOT start Phase 2 until Phase 1 is compiled, installed, and confirmed working
 - Don't start on Phase 2 features before Phase 1 is working in real use.
 - Don't assume the build system — inspect the repo (`Package.swift`? `.xcodeproj`? both?) before running any build command.
 
-## Open questions to resolve early
+## Resolved questions (historical)
 
-1. Fork-first on GitHub, or clone-then-decide?
-2. Which default sounds does the user want (Tink/Pop/Glass/other)?
-3. Is open-wispr installed via `brew`, downloaded binary, or built from source previously? (affects where the replacement binary goes)
-4. Does the user want three separate sounds (start/end/transcription-done) or just two (start/end) for Phase 1?
+1. ~~Fork-first or clone-then-decide?~~ → Forked: `Arogus22/open-wispr`.
+2. ~~Which default sounds?~~ → Ping (start) / Bottle (end) — matches the pt_PT "Sonar" / "Seixo" the user asked for.
+3. ~~Install method?~~ → brew. Patched binary sits in the Cellar `.app` bundle.
+4. ~~Two sounds or three (incl. transcription-done)?~~ → Two for Phase 1. Transcription-done can come later if useful.

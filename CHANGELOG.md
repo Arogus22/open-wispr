@@ -2,6 +2,61 @@
 
 All notable changes to this fork are tracked here.
 
+## 2026-04-29 — Planning: focus-lock, hotkey UI, meeting recorder; live transcription dropped
+
+### What changed
+- No source changes — pure design and roadmap work. Three feature threads opened, one closed.
+
+### Decisions made
+- **Focus-lock feature design (Phase 2 candidate).** At record start, snapshot `NSWorkspace.shared.frontmostApplication`. After Whisper transcription completes (NOT at the stop keypress), re-activate that app, wait ~300ms, then paste. Critical timing: the 4–5s of Whisper processing must run with the user's "browsing" app still focused — only the paste moment itself steals focus back.
+- Config fields proposed: `targetLockMode` ∈ {`"auto"` (default — refocus only when needed, clipboard fallback if app gone), `"clipboard"` (always copy, no paste), `"off"` (current behavior)}, and `pasteDelayMs` (default 300).
+- **Live / real-time transcription: dropped.** Whisper isn't truly streaming; sliding-window (whisper.cpp `stream` style) and VAD-chunked both sacrifice accuracy and add CPU/battery cost. Accuracy chosen over latency.
+- **Hotkey-capture UI proposed (Phase 2 candidate).** Hotkey submenu (matches existing Language/Model/Audio Input pattern) with presets + "Custom…" opening a small borderless NSPanel capturing next key or modifier-only key. New file `HotkeyCaptureWindow.swift` ~100 lines + ~30 lines in `StatusBarController.swift` + ~5 lines in `AppDelegate.swift`.
+
+### Discussion — meeting recorder (deferred, not committed)
+- User asked about recording meetings (e.g., Google Meet) capturing both system audio and mic.
+- Sketch: ScreenCaptureKit (macOS 13+) for system audio, AVAudioEngine for mic, mixed via aggregate device or dual-stream transcribed separately. New "meeting mode" with transcript-file output (not paste) + speaker labels.
+- Scope ~3–4 days. Not committed.
+
+### Files touched
+- None (planning only).
+
+### Open questions for next session
+1. `targetLockMode` default = `"auto"` — confirm?
+2. Lock target = frontmost app at *start* press (not stop) — confirm?
+3. Fallback feedback (activation failure / clipboard mode): status bar only, distinct sound, or both?
+4. `pasteDelayMs` default = 300ms — OK?
+5. Bundle hotkey-capture UI with focus-lock as one Phase 2 commit, or separate Phase 2.5?
+
+## 2026-04-24 — Phase 1 pushed to fork + git identity setup
+
+### What changed
+- No source changes this session — git hygiene and planning only.
+- Pushed Phase 1 (audio feedback) to personal GitHub fork `Arogus22/open-wispr` on `main`.
+- Configured privacy-safe git identity globally: name `Arogus`, email `Arogus22@users.noreply.github.com` (GitHub's noreply alias — keeps real name and personal email out of commit metadata).
+- Rewrote the initial commit's author with `git commit --amend --reset-author --no-edit` (the first commit had leaked the machine-default identity `Rafael Ramos <arogus@MacBook-Pro-de-Rafael.local>`). Force-pushed with `--force-with-lease`. Commit SHA changed from `867810d` → `3eeb79a`.
+
+### Why
+- Fork needs to be public-shareable (and eventually PR-able upstream) without exposing personal identity.
+- Using `--force-with-lease` instead of plain `--force` so the push fails safely if any parallel change landed on the remote — no silent clobber.
+
+### Files touched
+- None (git metadata only).
+
+### External changes
+- Global git config updated: `user.name`, `user.email`.
+- Remote `origin` now points at `https://github.com/Arogus22/open-wispr.git`.
+- `main` branch on the fork force-pushed once (acceptable for a fresh, unshared branch).
+
+### Discussion — future n8n / Jarvis integration (not implemented)
+- Explored wiring open-wispr into the existing n8n "Jarvis" workflow so voice commands can trigger automations.
+- Compared wake-word ("Hey Jarvis") vs dedicated hotkey approaches. Chose **second hotkey** for the first iteration — wake-word requires a second always-on listener (Porcupine or openWakeWord) and adds meaningful complexity/resource cost for a personal tool where pressing a key is already acceptable.
+- Architectural insight worth preserving: **local Whisper replaces the paid transcription API** in the current Jarvis flow. open-wispr can own the transcription step and POST the resulting text to an n8n webhook, cutting both cost and round-trip latency versus a cloud STT provider.
+- Sketch of the plan (deferred): add a "command mode" hotkey. Same recorder, same Whisper model, but on stop instead of pasting into the active app, `POST { text, timestamp, source: "open-wispr" }` to the Jarvis webhook. Dictation hotkey stays unchanged.
+
+### Verified
+- `git log` on `Arogus22/open-wispr` shows commit `3eeb79a` authored by `Arogus <Arogus22@users.noreply.github.com>`. No real name anywhere in the history.
+
 ## 2026-04-22 — Phase 1: Audio feedback on record start / stop
 
 ### What changed
