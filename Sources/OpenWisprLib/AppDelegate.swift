@@ -11,6 +11,17 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     var isReady = false
     public var lastTranscription: String?
 
+    // Focus-lock state (Phase 2 / U3).
+    // pendingFocusTarget: snapshot of the frontmost app at record-start, captured
+    // by value into the Whisper completion closure so each in-flight transcription
+    // owns its own target reference even across overlapping recordings.
+    // screenLocked: maintained by DistributedNotificationCenter observers below;
+    // when true, focus-lock activation + paste are skipped and the text only
+    // lands on the clipboard.
+    var pendingFocusTarget: NSRunningApplication?
+    var screenLocked: Bool = false
+    private var screenLockObservers: [NSObjectProtocol] = []
+
     public func applicationDidFinishLaunching(_ notification: Notification) {
         statusBar = StatusBarController()
         recorder = AudioRecorder()
@@ -32,6 +43,27 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         config = Config.load()
         inserter = TextInserter()
         recorder.preferredDeviceID = config.audioInputDeviceID
+
+        // Screen-lock observers (Phase 2 / U3). Public API; replaces the
+        // private CGSSession SPI considered earlier. Notifications fire on
+        // lock-screen activation and unlock; we maintain screenLocked in
+        // memory and read it inside the Whisper completion closure.
+        let dnc = DistributedNotificationCenter.default()
+        let lockObs = dnc.addObserver(
+            forName: NSNotification.Name("com.apple.screenIsLocked"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.screenLocked = true
+        }
+        let unlockObs = dnc.addObserver(
+            forName: NSNotification.Name("com.apple.screenIsUnlocked"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.screenLocked = false
+        }
+        screenLockObservers = [lockObs, unlockObs]
         if Config.effectiveMaxRecordings(config.maxRecordings) == 0 {
             RecordingStore.deleteAllRecordings()
         }
@@ -223,6 +255,20 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleRecordingStart() {
         guard !isPressed else { return }
+
+        // Snapshot the frontmost app for focus-lock (Phase 2 / U3). We filter
+        // ourselves out by processIdentifier — robust against
+        // Bundle.main.bundleIdentifier being nil for SwiftPM executables run
+        // inside a brew-installed .app bundle. The snapshot is later captured
+        // by value into the Whisper completion closure inside handleRecordingStop.
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        if let frontmost = frontmost,
+           frontmost.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            pendingFocusTarget = nil
+        } else {
+            pendingFocusTarget = frontmost
+        }
+
         isPressed = true
         statusBar.state = .recording
         do {
@@ -258,6 +304,15 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         statusBar.state = .transcribing
 
+        // Capture focus-lock context for this recording (Phase 2 / U3). These
+        // locals are captured by value into the Whisper completion closure
+        // below; toggling Focus Lock or Preserve Clipboard mid-Whisper
+        // affects the next recording, never the in-flight one.
+        let target = self.pendingFocusTarget
+        let focusLock = config.focusLockEnabled?.value ?? true
+        let preserve = config.preserveClipboard?.value ?? false
+        let pasteDelay = TimeInterval(Config.effectivePasteDelayMs(config.pasteDelayMs)) / 1000.0
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             let maxRecordings = Config.effectiveMaxRecordings(self.config.maxRecordings)
@@ -275,7 +330,13 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                 DispatchQueue.main.async {
                     if !text.isEmpty {
                         self.lastTranscription = text
-                        self.inserter.insert(text: text)
+                        self.performFocusLockedPaste(
+                            text: text,
+                            target: target,
+                            focusLock: focusLock,
+                            preserve: preserve,
+                            pasteDelay: pasteDelay
+                        )
                     }
                     self.statusBar.state = .idle
                     self.statusBar.buildMenu()
@@ -296,6 +357,44 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
             }
+        }
+    }
+
+    /// Performs the post-Whisper paste with optional focus-lock activation.
+    ///
+    /// When focus-lock conditions hold (enabled, target alive, screen unlocked,
+    /// no overlapping recording in progress), brings the snapshot target app
+    /// to the front, waits `pasteDelay` seconds, verifies the activation took
+    /// effect (macOS 14+ may silently no-op), then pastes. Otherwise pastes
+    /// directly into whatever is currently frontmost. The clipboard contains
+    /// the transcribed text either way, controlled by `preserve`.
+    private func performFocusLockedPaste(
+        text: String,
+        target: NSRunningApplication?,
+        focusLock: Bool,
+        preserve: Bool,
+        pasteDelay: TimeInterval
+    ) {
+        let canActivate = focusLock
+            && target != nil
+            && !(target?.isTerminated ?? true)
+            && !screenLocked
+            && !isPressed   // skip activate if a new recording is already in progress
+
+        if canActivate, let target = target {
+            target.activate(options: .activateIgnoringOtherApps)
+            DispatchQueue.main.asyncAfter(deadline: .now() + pasteDelay) { [weak self] in
+                guard let self = self else { return }
+                // Verify activation actually took effect — macOS 14+ may silently no-op
+                // under tightened focus-stealing rules.
+                let currentFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
+                if currentFrontmost != target.processIdentifier {
+                    print("focus-lock: activation no-op (target pid \(target.processIdentifier), frontmost pid \(currentFrontmost ?? -1))")
+                }
+                self.inserter.insert(text: text, restoreClipboard: preserve)
+            }
+        } else {
+            inserter.insert(text: text, restoreClipboard: preserve)
         }
     }
 
