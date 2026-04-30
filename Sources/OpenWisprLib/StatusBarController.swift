@@ -281,6 +281,39 @@ class StatusBarController: NSObject {
         toggleItem.state = (config.toggleMode?.value ?? false) ? .on : .off
         menu.addItem(toggleItem)
 
+        // Focus Lock toggle (Phase 2 / U4). When on, after Whisper completes,
+        // the snapshotted target app is brought forward and the paste lands
+        // in the original app — preserves "browse during processing" UX.
+        let focusLockTarget = MenuItemTarget { [weak self] in
+            var cfg = Config.load()
+            let current = cfg.focusLockEnabled?.value ?? true
+            cfg.focusLockEnabled = FlexBool(!current)
+            try? cfg.save()
+            self?.onConfigChange?(cfg)
+        }
+        menuItemTargets.append(focusLockTarget)
+        let focusLockItem = NSMenuItem(title: "Focus Lock", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+        focusLockItem.target = focusLockTarget
+        focusLockItem.state = (config.focusLockEnabled?.value ?? true) ? .on : .off
+        menu.addItem(focusLockItem)
+
+        // Preserve Clipboard toggle (Phase 2 / U4). When off (default), the
+        // transcribed text remains on the clipboard after paste. When on,
+        // the pre-recording pasteboard is restored — escape hatch for
+        // workflows that involve sensitive previously-copied content.
+        let preserveTarget = MenuItemTarget { [weak self] in
+            var cfg = Config.load()
+            let current = cfg.preserveClipboard?.value ?? false
+            cfg.preserveClipboard = FlexBool(!current)
+            try? cfg.save()
+            self?.onConfigChange?(cfg)
+        }
+        menuItemTargets.append(preserveTarget)
+        let preserveItem = NSMenuItem(title: "Preserve Clipboard", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+        preserveItem.target = preserveTarget
+        preserveItem.state = (config.preserveClipboard?.value ?? false) ? .on : .off
+        menu.addItem(preserveItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let lastText = (NSApplication.shared.delegate as? AppDelegate)?.lastTranscription
