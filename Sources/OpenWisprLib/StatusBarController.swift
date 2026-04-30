@@ -16,6 +16,7 @@ class StatusBarController: NSObject {
     private var copiedFeedback = false
     private var menuItemTargets: [MenuItemTarget] = []
     private var stateMenuItem: NSMenuItem?
+    private var hotkeyCaptureWindow: HotkeyCaptureWindow?
 
     var reprocessHandler: ((URL) -> Void)?
     var onConfigChange: ((Config) -> Void)?
@@ -433,10 +434,17 @@ class StatusBarController: NSObject {
         delegate.reloadConfig()
     }
 
-    /// Opens the hotkey capture panel. Stub for U5 — real implementation
-    /// arrives in U6 (Sources/OpenWisprLib/HotkeyCaptureWindow.swift).
+    /// Opens the hotkey capture panel. Wired by U6.
     fileprivate func openHotkeyCaptureWindow() {
-        // U6 will replace this with HotkeyCaptureWindow instantiation.
+        guard let appDelegate = NSApplication.shared.delegate as? AppDelegate else { return }
+        // Hold a strong reference for the panel's lifetime — it self-cleans
+        // up via willCloseObserver, but we need to keep it retained until
+        // then. Replacing any prior instance is fine; the prior one closes.
+        let window = HotkeyCaptureWindow(appDelegate: appDelegate) { [weak self] cfg in
+            self?.onConfigChange?(cfg)
+        }
+        hotkeyCaptureWindow = window
+        window.show()
     }
 
     @objc private func openConfiguration() {

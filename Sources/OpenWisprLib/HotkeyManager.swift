@@ -63,6 +63,8 @@ class HotkeyManager {
     }
 
     private func isModifierOnlyKey(_ code: UInt16) -> Bool {
-        return [54, 55, 56, 58, 59, 60, 61, 62, 63].contains(code)
+        // 54-56, 58-63: modifier keys (cmd/shift/option/control/fn). 57: Caps Lock
+        // (added in Phase 2 / U6 — the capture panel allows Caps Lock as a hotkey).
+        return [54, 55, 56, 57, 58, 59, 60, 61, 62, 63].contains(code)
     }
 }
