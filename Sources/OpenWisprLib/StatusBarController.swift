@@ -266,6 +266,68 @@ class StatusBarController: NSObject {
         audioItem.submenu = audioSubmenu
         menu.addItem(audioItem)
 
+        // Hotkey submenu (Phase 2 / U5). Locked preset list + Custom… entry.
+        // Greys out while a recording is active in toggle mode (read state
+        // enum directly — single source of truth, no new callback channel).
+        let isRecording: Bool
+        if case .recording = self.state { isRecording = true } else { isRecording = false }
+
+        let hotkeyItem = NSMenuItem(title: "Hotkey: \(hotkeyDesc)", action: nil, keyEquivalent: "")
+        let hotkeySubmenu = NSMenu()
+        hotkeySubmenu.autoenablesItems = false
+
+        // Match presets against current hotkey by keyCode + sorted modifier set.
+        // Round-trip protection: the menu label uses describe(); the match
+        // uses parse() of the same string, ensuring round-trip consistency.
+        let currentSortedMods = Set(config.hotkey.modifiers.map { $0.lowercased() })
+        let presets: [(label: String, key: String)] = [
+            ("Right Option",  "rightoption"),
+            ("Right Cmd",     "rightcmd"),
+            ("F13",           "f13"),
+            ("Cmd+Shift+R",   "cmd+shift+r"),
+        ]
+
+        for preset in presets {
+            let target = MenuItemTarget { [weak self] in
+                guard let parsed = KeyCodes.parse(preset.key) else { return }
+                var cfg = Config.load()
+                cfg.hotkey = HotkeyConfig(keyCode: parsed.keyCode, modifiers: parsed.modifiers)
+                try? cfg.save()
+                self?.onConfigChange?(cfg)
+            }
+            menuItemTargets.append(target)
+            let item = NSMenuItem(title: preset.label, action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+            item.target = target
+            item.isEnabled = !isRecording
+            // Checkmark when this preset matches the current hotkey
+            // (keyCode equality + same modifier set).
+            if let parsed = KeyCodes.parse(preset.key) {
+                let presetMods = Set(parsed.modifiers.map { $0.lowercased() })
+                if parsed.keyCode == config.hotkey.keyCode && presetMods == currentSortedMods {
+                    item.state = .on
+                }
+            }
+            hotkeySubmenu.addItem(item)
+        }
+
+        hotkeySubmenu.addItem(NSMenuItem.separator())
+
+        // Custom… opens the HotkeyCaptureWindow (U6 wires the actual window
+        // behavior; for now this fires a placeholder method on AppDelegate
+        // that U6 will replace with the real panel invocation).
+        let customTarget = MenuItemTarget { [weak self] in
+            self?.openHotkeyCaptureWindow()
+        }
+        menuItemTargets.append(customTarget)
+        let customItem = NSMenuItem(title: "Custom…", action: #selector(MenuItemTarget.invoke), keyEquivalent: "")
+        customItem.target = customTarget
+        customItem.isEnabled = !isRecording
+        hotkeySubmenu.addItem(customItem)
+
+        hotkeyItem.submenu = hotkeySubmenu
+        hotkeyItem.isEnabled = !isRecording
+        menu.addItem(hotkeyItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let toggleTarget = MenuItemTarget { [weak self] in
@@ -369,6 +431,12 @@ class StatusBarController: NSObject {
     @objc private func reloadConfiguration() {
         guard let delegate = NSApplication.shared.delegate as? AppDelegate else { return }
         delegate.reloadConfig()
+    }
+
+    /// Opens the hotkey capture panel. Stub for U5 — real implementation
+    /// arrives in U6 (Sources/OpenWisprLib/HotkeyCaptureWindow.swift).
+    fileprivate func openHotkeyCaptureWindow() {
+        // U6 will replace this with HotkeyCaptureWindow instantiation.
     }
 
     @objc private func openConfiguration() {
