@@ -22,6 +22,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
     var screenLocked: Bool = false
     private var screenLockObservers: [NSObjectProtocol] = []
 
+    // U7: tracks whether the global hotkey is temporarily paused (e.g.,
+    // while the HotkeyCaptureWindow from U6 is open). Cleared on resume.
+    var hotkeyPaused: Bool = false
+
     public func applicationDidFinishLaunching(_ notification: Notification) {
         statusBar = StatusBarController()
         recorder = AudioRecorder()
@@ -227,6 +231,34 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
 
         let hotkeyDesc = KeyCodes.describe(keyCode: config.hotkey.keyCode, modifiers: config.hotkey.modifiers)
         print("Config updated: lang=\(config.language) model=\(config.modelSize) hotkey=\(hotkeyDesc)")
+    }
+
+    /// Stops the global hotkey monitor (Phase 2 / U7). Called by the
+    /// HotkeyCaptureWindow (U6) on open so that pressing the current
+    /// recording hotkey while the panel is up rebinds it instead of
+    /// triggering a recording. Idempotent — calling twice is safe.
+    public func pauseHotkey() {
+        guard !hotkeyPaused else { return }
+        hotkeyManager?.stop()
+        hotkeyPaused = true
+    }
+
+    /// Restores the global hotkey monitor with the current config (Phase 2
+    /// / U7). Called by HotkeyCaptureWindow on close (windowWillClose,
+    /// windowDidResignKey, or watchdog timeout). Idempotent — calling
+    /// when not paused is a no-op.
+    public func resumeHotkey() {
+        guard hotkeyPaused else { return }
+        hotkeyManager?.stop()
+        hotkeyManager = HotkeyManager(
+            keyCode: config.hotkey.keyCode,
+            modifiers: config.hotkey.modifierFlags
+        )
+        hotkeyManager?.start(
+            onKeyDown: { [weak self] in self?.handleKeyDown() },
+            onKeyUp: { [weak self] in self?.handleKeyUp() }
+        )
+        hotkeyPaused = false
     }
 
     private func handleKeyDown() {
