@@ -26,6 +26,8 @@ The default hotkey is the **Globe key** (🌐, bottom-left). Hold it, speak, rel
 
 > **[Full installation guide](docs/install-guide.md)** — permissions walkthrough with screenshots, non-English macOS instructions, and troubleshooting.
 
+> **[Building from source / fork install](docs/INSTALL.md)** — for contributors and people maintaining a fork. Covers self-signed cert setup, the `./scripts/ship.sh` release flow, and the `.command` shortcut for launching after Quit.
+
 ## Uninstall
 
 ```bash
